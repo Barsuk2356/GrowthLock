@@ -1,0 +1,13 @@
+{
+  "name": "growthlock-prototype",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "latest",
+    "express": "latest"
+  }
+}
