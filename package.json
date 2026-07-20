@@ -1,0 +1,19 @@
+{
+  "name": "growthlock",
+  "version": "1.0.0",
+  "description": "AI-powered self-development platform with goals, daily tasks, quizzes, materials and skill points.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "latest",
+    "express": "latest"
+  }
+}
