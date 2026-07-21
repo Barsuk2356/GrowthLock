@@ -3338,7 +3338,7 @@
           <div class="score-badge"><div><b>0</b><small>/100</small></div></div>
           <div>
             <b>AI не смог оценить цель</b>
-            <p class="section-desc" style="margin:7px 0 0;">${escapeHtml(error.message || error)}. Если это Access denied/security policy — OpenRouter заблокировал запрос. Попробуй VPN, другой ключ, другую модель или другого провайдера.</p>
+            <p class="section-desc" style="margin:7px 0 0;">${escapeHtml(error.message || error)}. Если используешь Ollama, проверь модель, логи PM2 и что ответ AI возвращается в JSON.</p>
             <div class="meter"><span style="width:0%"></span></div>
           </div>`;
         showToast('AI-оценка цели не сработала. Проверь backend/API.');

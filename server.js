@@ -240,19 +240,60 @@ function getDifficultyProfile(value) {
   return { difficulty, ...profiles[difficulty] };
 }
 
-function extractJson(text) {
-  const cleaned = String(text || '')
+function stripThinking(text) {
+  return String(text || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
     .replace(/^```json\s*/i, '')
     .replace(/^```\s*/i, '')
     .replace(/```$/i, '')
     .trim();
+}
+
+function findBalancedJsonObject(text) {
+  const source = stripThinking(text);
+  const start = source.indexOf('{');
+  if (start === -1) return '';
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < source.length; i++) {
+    const char = source[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+    if (depth === 0) return source.slice(start, i + 1);
+  }
+
+  return source.slice(start);
+}
+
+function extractJson(text) {
+  const cleaned = stripThinking(text);
 
   try {
     return JSON.parse(cleaned);
   } catch (_) {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('AI did not return JSON');
-    return JSON.parse(match[0]);
+    const jsonObject = findBalancedJsonObject(cleaned);
+    if (!jsonObject) throw new Error('AI did not return JSON');
+    return JSON.parse(jsonObject);
   }
 }
 
@@ -267,7 +308,7 @@ async function callAIJson(messages, temperature = 0.25, schemaHint = '') {
       {
         role: 'system',
         content:
-          'Ты JSON-repair модуль. Твоя задача — получить текст с почти валидным JSON и вернуть ТОЛЬКО исправленный валидный JSON. Никакого markdown, никаких пояснений, только JSON. Сохрани смысл и структуру. Если массив или поле оборвались, аккуратно заверши JSON.'
+          'Ты JSON-repair модуль. Твоя задача — получить текст с почти валидным JSON и вернуть ТОЛЬКО исправленный валидный JSON. Удали любые <think>...</think>, markdown и пояснения. Верни только JSON. Сохрани смысл и структуру. Если массив или поле оборвались, аккуратно заверши JSON.'
       },
       {
         role: 'user',
