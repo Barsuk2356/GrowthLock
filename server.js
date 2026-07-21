@@ -23,6 +23,8 @@ const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || 'm
   .filter(Boolean);
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:1.5b';
 const quizzes = new Map();
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '.data', 'growthlock-db.json');
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -171,10 +173,22 @@ async function requireUser(req, res) {
 }
 
 function getProviderConfig() {
+  if (AI_PROVIDER === 'ollama') {
+    return {
+      provider: 'Ollama',
+      apiKey: '',
+      requiresApiKey: false,
+      model: OLLAMA_MODEL,
+      url: `${OLLAMA_BASE_URL}/v1/chat/completions`,
+      headers: {}
+    };
+  }
+
   if (AI_PROVIDER === 'deepseek') {
     return {
       provider: 'DeepSeek',
       apiKey: DEEPSEEK_API_KEY,
+      requiresApiKey: true,
       model: DEEPSEEK_MODEL,
       url: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/chat/completions',
       headers: {}
@@ -184,6 +198,7 @@ function getProviderConfig() {
   return {
     provider: 'OpenRouter',
     apiKey: OPENROUTER_API_KEY,
+    requiresApiKey: true,
     model: OPENROUTER_MODEL,
     url: 'https://openrouter.ai/api/v1/chat/completions',
     headers: {
@@ -298,17 +313,20 @@ function getModelsToTry(config) {
 }
 
 async function callProvider(config, model, messages, temperature) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...config.headers
+  };
+  if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+
   const response = await fetch(config.url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-      ...config.headers
-    },
+    headers,
     body: JSON.stringify({
       model,
       temperature,
-      messages
+      messages,
+      stream: false
     })
   });
 
@@ -332,7 +350,7 @@ async function callProvider(config, model, messages, temperature) {
 async function callAI(messages, temperature = 0.25) {
   const config = getProviderConfig();
 
-  if (!config.apiKey) {
+  if (config.requiresApiKey !== false && !config.apiKey) {
     const error = new Error(`${config.provider} API key is not set`);
     error.status = 500;
     throw error;
@@ -378,13 +396,13 @@ app.get('/health', async (_, res) => {
     env: NODE_ENV,
     db: dbOk ? 'ok' : 'error',
     aiProvider: config.provider,
-    aiConfigured: Boolean(config.apiKey)
+    aiConfigured: config.requiresApiKey === false ? true : Boolean(config.apiKey)
   });
 });
 
 app.get('/ready', async (_, res) => {
   const config = getProviderConfig();
-  if (!config.apiKey) return res.status(503).json({ ok: false, error: `${config.provider} API key is not set` });
+  if (config.requiresApiKey !== false && !config.apiKey) return res.status(503).json({ ok: false, error: `${config.provider} API key is not set` });
   try {
     await readDb();
     res.json({ ok: true });
@@ -396,7 +414,7 @@ app.get('/ready', async (_, res) => {
 app.get('/api/ai/status', (_, res) => {
   const config = getProviderConfig();
   res.json({
-    connected: Boolean(config.apiKey),
+    connected: config.requiresApiKey === false ? true : Boolean(config.apiKey),
     provider: config.provider,
     model: config.model
   });
