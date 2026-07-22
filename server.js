@@ -3,6 +3,7 @@ import 'dotenv/config';
 import path from 'path';
 import fs from 'fs/promises';
 import crypto from 'crypto';
+import { ProxyAgent } from 'undici';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -15,6 +16,8 @@ const PORT = process.env.PORT || 3000;
 // - deepseek: uses DEEPSEEK_API_KEY and DEEPSEEK_MODEL
 // - openrouter: uses OPENROUTER_API_KEY and OPENROUTER_MODEL
 const AI_PROVIDER = (process.env.AI_PROVIDER || (process.env.DEEPSEEK_API_KEY ? 'deepseek' : 'openrouter')).toLowerCase();
+// Optional HTTP/HTTPS proxy for external AI requests only. Example: http://user:pass@host:port
+const AI_PROXY_URL = process.env.AI_PROXY_URL || '';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-oss-20b:free';
 const OPENROUTER_FALLBACK_MODELS = (process.env.OPENROUTER_FALLBACK_MODELS || 'meta-llama/llama-3.2-3b-instruct:free,qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-120b:free')
@@ -25,6 +28,7 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:1.5b';
+const aiProxyAgent = AI_PROXY_URL ? new ProxyAgent(AI_PROXY_URL) : null;
 const quizzes = new Map();
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '.data', 'growthlock-db.json');
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -360,7 +364,7 @@ async function callProvider(config, model, messages, temperature) {
   };
   if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
 
-  const response = await fetch(config.url, {
+  const fetchOptions = {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -369,7 +373,14 @@ async function callProvider(config, model, messages, temperature) {
       messages,
       stream: false
     })
-  });
+  };
+
+  // Do not proxy local Ollama. Proxy is only for external AI providers like OpenRouter/DeepSeek.
+  if (aiProxyAgent && config.provider !== 'Ollama') {
+    fetchOptions.dispatcher = aiProxyAgent;
+  }
+
+  const response = await fetch(config.url, fetchOptions);
 
   const raw = await response.text();
   if (!response.ok) {
@@ -437,7 +448,8 @@ app.get('/health', async (_, res) => {
     env: NODE_ENV,
     db: dbOk ? 'ok' : 'error',
     aiProvider: config.provider,
-    aiConfigured: config.requiresApiKey === false ? true : Boolean(config.apiKey)
+    aiConfigured: config.requiresApiKey === false ? true : Boolean(config.apiKey),
+    aiProxyEnabled: Boolean(AI_PROXY_URL)
   });
 });
 
