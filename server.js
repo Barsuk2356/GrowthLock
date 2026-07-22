@@ -28,6 +28,9 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const OLLAMA_BASE_URL = (process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:1.5b';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_BASE_URL = (process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
 const aiProxyAgent = AI_PROXY_URL ? new ProxyAgent(AI_PROXY_URL) : null;
 const quizzes = new Map();
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '.data', 'growthlock-db.json');
@@ -184,6 +187,17 @@ function getProviderConfig() {
       requiresApiKey: false,
       model: OLLAMA_MODEL,
       url: `${OLLAMA_BASE_URL}/v1/chat/completions`,
+      headers: {}
+    };
+  }
+
+  if (AI_PROVIDER === 'gemini') {
+    return {
+      provider: 'Gemini',
+      apiKey: GEMINI_API_KEY,
+      requiresApiKey: true,
+      model: GEMINI_MODEL,
+      url: `${GEMINI_BASE_URL}/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY || '')}`,
       headers: {}
     };
   }
@@ -357,7 +371,70 @@ function getModelsToTry(config) {
   return [...new Set([config.model, ...OPENROUTER_FALLBACK_MODELS])];
 }
 
+function convertMessagesForGemini(messages) {
+  const systemTexts = [];
+  const contents = [];
+
+  for (const message of messages) {
+    const text = String(message.content || '');
+    if (!text.trim()) continue;
+    if (message.role === 'system') {
+      systemTexts.push(text);
+      continue;
+    }
+    contents.push({
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text }]
+    });
+  }
+
+  return {
+    systemInstruction: systemTexts.length ? { parts: [{ text: systemTexts.join('\n\n') }] } : undefined,
+    contents
+  };
+}
+
+async function callGeminiProvider(config, messages, temperature) {
+  const { systemInstruction, contents } = convertMessagesForGemini(messages);
+  const body = {
+    contents,
+    generationConfig: {
+      temperature,
+      responseMimeType: 'application/json'
+    }
+  };
+  if (systemInstruction) body.systemInstruction = systemInstruction;
+
+  const fetchOptions = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  };
+
+  if (aiProxyAgent) fetchOptions.dispatcher = aiProxyAgent;
+
+  const response = await fetch(config.url, fetchOptions);
+  const raw = await response.text();
+  if (!response.ok) {
+    const message = parseProviderError(raw, 'Gemini request failed');
+    const error = new Error(`Gemini: ${message}`);
+    error.status = response.status;
+    error.providerMessage = message;
+    error.model = config.model;
+    throw error;
+  }
+
+  const data = JSON.parse(raw);
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  const content = parts.map((part) => part.text || '').join('').trim();
+  return { content, model: config.model };
+}
+
 async function callProvider(config, model, messages, temperature) {
+  if (config.provider === 'Gemini') {
+    return callGeminiProvider(config, messages, temperature);
+  }
+
   const headers = {
     'Content-Type': 'application/json',
     ...config.headers
