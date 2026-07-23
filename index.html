@@ -3009,16 +3009,16 @@
     }
 
     function renderAiError(error) {
+      console.warn('AI error:', error);
       quizLoading.style.display = 'none';
       quizQuestions.innerHTML = '';
       quizResult.className = 'quiz-result show fail';
       quizResult.innerHTML = `
-        <h4>AI сейчас недоступен</h4>
-        <p>Сайт дошёл до AI-сервиса, но провайдер мог заблокировать запрос, модель могла быть недоступна или backend не запущен.</p>
-        <p><b>Ошибка:</b> ${escapeHtml(error.message || error)}</p>
-        <p>Если видишь <b>Access denied by security policy</b> — это блокировка OpenRouter, а не ошибка сайта. Попробуй VPN, другой ключ, другую модель или другого провайдера.</p>
+        <h4>AI временно не ответил</h4>
+        <p>Попробуйте ещё раз через несколько секунд. Иногда модель перегружена или ответ не успевает обработаться.</p>
+        <p class="section-desc" style="margin:8px 0 0; font-size:13px;">Если ошибка повторяется несколько раз подряд, администратор проверит AI-провайдера.</p>
       `;
-      quizHint.textContent = 'Для AI нужен backend через npm start. Если backend работает, проблема может быть на стороне AI-провайдера.';
+      quizHint.textContent = 'Попробуйте ещё раз. Данные не потеряны.';
       setQuizControls('error');
     }
 
@@ -3205,8 +3205,9 @@
           ${materials.length ? `<div class="goal-subblock"><b>Что повторить:</b><ul class="goal-list">${materials.map(item => `<li>${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)} — ${escapeHtml(item.why || '')}${item.source ? ` (${escapeHtml(item.source)})` : ''}</li>`).join('')}</ul></div>` : ''}
         `;
       } catch (error) {
+        console.warn('AI mentor error:', error);
         mentorResult.className = 'quiz-result show fail';
-        mentorResult.innerHTML = `<h4>AI-наставник не ответил</h4><p>${escapeHtml(error.message || error)}</p>`;
+        mentorResult.innerHTML = `<h4>AI-наставник временно не ответил</h4><p>Попробуйте ещё раз через несколько секунд.</p>`;
       } finally {
         mentorBtn.disabled = false;
         mentorBtn.textContent = 'Разобрать ошибки с AI-наставником';
@@ -3334,14 +3335,15 @@
         document.getElementById('goals')?.scrollIntoView({ behavior: 'smooth' });
         showToast('AI оценил цель, сохранил её в раздел целей и подобрал материалы.');
       } catch (error) {
+        console.warn('Goal review AI error:', error);
         $('aiScore').innerHTML = `
-          <div class="score-badge"><div><b>0</b><small>/100</small></div></div>
+          <div class="score-badge"><div><b>!</b><small></small></div></div>
           <div>
-            <b>AI не смог оценить цель</b>
-            <p class="section-desc" style="margin:7px 0 0;">${escapeHtml(error.message || error)}. Если используешь Ollama, проверь модель, логи PM2 и что ответ AI возвращается в JSON.</p>
+            <b>AI временно не ответил</b>
+            <p class="section-desc" style="margin:7px 0 0;">Попробуйте ещё раз через несколько секунд. Цель не потеряна — можно повторить оценку.</p>
             <div class="meter"><span style="width:0%"></span></div>
           </div>`;
-        showToast('AI-оценка цели не сработала. Проверь backend/API.');
+        showToast('AI временно не ответил. Попробуйте ещё раз.');
       } finally {
         button.disabled = false;
         button.textContent = 'Оценить цель через AI';
