@@ -31,6 +31,12 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:1.5b';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const GEMINI_BASE_URL = (process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
+const ZVENO_API_KEY = process.env.ZVENO_API_KEY;
+const ZVENO_MODEL = process.env.ZVENO_MODEL || 'openai/gpt-4o';
+const ZVENO_BASE_URL = (process.env.ZVENO_BASE_URL || 'https://api.zveno.ai/v1').replace(/\/$/, '');
+const CUSTOM_AI_API_KEY = process.env.CUSTOM_AI_API_KEY;
+const CUSTOM_AI_MODEL = process.env.CUSTOM_AI_MODEL || 'openai/gpt-4o';
+const CUSTOM_AI_BASE_URL = (process.env.CUSTOM_AI_BASE_URL || '').replace(/\/$/, '');
 const aiProxyAgent = AI_PROXY_URL ? new ProxyAgent(AI_PROXY_URL) : null;
 const quizzes = new Map();
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, '.data', 'growthlock-db.json');
@@ -187,6 +193,28 @@ function getProviderConfig() {
       requiresApiKey: false,
       model: OLLAMA_MODEL,
       url: `${OLLAMA_BASE_URL}/v1/chat/completions`,
+      headers: {}
+    };
+  }
+
+  if (AI_PROVIDER === 'zveno') {
+    return {
+      provider: 'Zveno',
+      apiKey: ZVENO_API_KEY,
+      requiresApiKey: true,
+      model: ZVENO_MODEL,
+      url: `${ZVENO_BASE_URL}/chat/completions`,
+      headers: {}
+    };
+  }
+
+  if (AI_PROVIDER === 'custom') {
+    return {
+      provider: 'Custom',
+      apiKey: CUSTOM_AI_API_KEY,
+      requiresApiKey: true,
+      model: CUSTOM_AI_MODEL,
+      url: `${CUSTOM_AI_BASE_URL}/chat/completions`,
       headers: {}
     };
   }
